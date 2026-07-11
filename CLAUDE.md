@@ -109,6 +109,7 @@ Hosted-page routes (served by gateway, **not** part of the signed API):
 | `POST` | `/pay/:token` | Form submit (`x-www-form-urlencoded`). |
 | `GET`  | `/pay/:token/3ds` | Simulated ACS challenge page (Approve/Decline). |
 | `POST` | `/pay/:token/3ds` | Challenge decision submit (`x-www-form-urlencoded`). |
+| `POST` | `/pay/:token/wallet` | Dummy PayPal/Google Pay submit (`{ method }`, no card data). |
 
 Create-payment request (Zod-validated):
 
@@ -142,6 +143,10 @@ model Merchant {
   webhookUrl   String?             // default target; per-payment webhookUrl overrides
   createdAt    DateTime  @default(now())
   payments     Payment[]
+
+  cardEnabled      Boolean @default(true)   // admin-toggled per merchant, see Payment methods
+  paypalEnabled    Boolean @default(false)  // dummy, no real integration
+  googlePayEnabled Boolean @default(false)  // dummy, no real integration
 }
 
 model Operator {              // gateway staff who administer merchants
@@ -160,7 +165,8 @@ model Payment {
   reference      String
   status         String              // see state machine
   captureNow     Boolean
-  cardBrand      String?             // "visa" - NEVER the full PAN
+  paymentMethod  String   @default("card")  // "card" | "paypal" | "google_pay"
+  cardBrand      String?             // "visa" - NEVER the full PAN, and only meaningful when paymentMethod is "card"
   cardLast4      String?             // "4242"
   hostedToken    String?  @unique    // for /pay/:token
   idempotencyKey String?
@@ -286,6 +292,17 @@ Each entry carries a human-readable `reason` the UI surfaces on the result scree
 
 ---
 
+## Payment methods - `packages/shared/paymentMethods.ts`
+
+A fixed catalog for now, `PAYMENT_METHOD_CATALOG` in `packages/shared`: `card` (real, routed through the mock acquirer's test-card table), `paypal` and `google_pay` (**dummy** - no real integration, simulated one-click wallets).
+
+- **Admin-configured per merchant**: `/admin/merchants/:id` has a "Payment methods" checklist backed by `Merchant.cardEnabled` / `paypalEnabled` / `googlePayEnabled`. The PATCH route rejects a change that would leave all three `false` - a merchant must always have at least one usable method.
+- **Enforced on the hosted payment page only.** `GET /pay/:token` (via `apps/gateway/server/api/pay/[token].get.ts`) returns the merchant's enabled flags; the page (`pages/pay/[token]/index.vue`) renders a method tab per enabled entry (skipped entirely if only one is enabled) and shows either the existing card form or a single "Pay with {method}" button. The direct server-to-server JSON API stays card-only - a wallet has no server-to-server analogue here.
+- **Dummy wallet flow**: submitting the wallet button posts `{ method }` to `POST /pay/:token/wallet` (a new gateway route, separate from the card form's `POST /pay/:token` since there's no card data to parse). It checks the merchant actually has that method enabled server-side (never trust the client), calls the acquirer's `POST /charge-wallet` (`{ method, amount, currency }`, no PAN), which always returns approved - deterministic, same "no randomness" rule as the card test catalog. No 3DS branch for wallets in this simplified model.
+- `Payment.paymentMethod` records which rail was used (`"card"` default). `cardBrand`/`cardLast4` stay `null` for wallet payments.
+
+---
+
 ## Webhooks (gateway → shop)
 
 On every terminal status change the gateway POSTs the merchant's `webhookUrl`:
@@ -345,7 +362,7 @@ Pages:
 | `/admin/login` | Operator sign-in. |
 | `/admin/merchants` | List all merchants with active/inactive state and basic volume. |
 | `/admin/merchants/new` | **Create a merchant.** |
-| `/admin/merchants/:id` | Edit name, enable/disable, rotate keys, reset portal password. |
+| `/admin/merchants/:id` | Edit name, enable/disable, rotate keys, reset portal password, toggle payment methods. |
 | `/admin/settlements` | Pending-eligible summary, **run a batch settlement** for all merchants at once, and history of past batches. |
 | `/admin/settlements/:id` | One batch's detail: per-merchant totals and per-payment outcomes. |
 
@@ -375,6 +392,7 @@ Guard: an operator-session middleware protects `/admin/*` and `server/api/admin/
 - [ ] `active: false` blocks both the API (HMAC middleware → `401`) and portal login.
 - [ ] Operator and merchant sessions are separate namespaces; neither can access the other's routes.
 - [ ] Batch settlement: `/admin/settlements` runs one batch across all merchants, gateway-owned via `POST /api/internal/settlements/run` (internal-secret gated), acquirer `/settle` returns per-item outcomes, settled payments fire `payment.settled` webhooks.
+- [ ] Payment methods: admin toggles card/PayPal/Google Pay per merchant from `/admin/merchants/:id`; hosted payment page only offers enabled methods; dummy wallets settle via acquirer `/charge-wallet` and always approve.
 - [ ] Playwright: hosted happy path (4242 → captured); a direct decline (…0002 → declined); admin creates a merchant and that merchant then logs into the portal and sees the payment; admin runs a settlement batch and the payment shows `settled`.
 
 ---

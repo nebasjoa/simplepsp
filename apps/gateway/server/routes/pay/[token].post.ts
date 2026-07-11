@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
   // Record the card metadata as soon as we know it, regardless of whether a 3DS challenge follows.
   const withCard = await prisma.payment.update({
     where: { id: payment.id },
-    data: { cardBrand: charge.brand, cardLast4: charge.last4 },
+    data: { paymentMethod: "card", cardBrand: charge.brand, cardLast4: charge.last4 },
   });
 
   if (charge.outcome === "requires_3ds") {

@@ -1,5 +1,11 @@
 <script setup lang="ts">
+import { PAYMENT_METHOD_CATALOG } from "@simplepsp/shared";
+
 definePageMeta({ middleware: "merchant-auth", layout: "portal" });
+
+function methodLabel(id: string): string {
+  return PAYMENT_METHOD_CATALOG.find((m) => m.id === id)?.label ?? id;
+}
 
 const STATUSES = [
   "initiated",
@@ -50,6 +56,7 @@ watch([status, reference], () => {
         <tr style="text-align: left; border-bottom: 1px solid #ddd">
           <th>Reference</th>
           <th>Status</th>
+          <th>Method</th>
           <th>Amount</th>
           <th>Created</th>
         </tr>
@@ -58,6 +65,7 @@ watch([status, reference], () => {
         <tr v-for="p in data?.items" :key="p.id" style="border-bottom: 1px solid #eee">
           <td><NuxtLink :to="`/portal/payments/${p.id}`">{{ p.reference }}</NuxtLink></td>
           <td>{{ p.status }}</td>
+          <td>{{ methodLabel(p.paymentMethod) }}</td>
           <td>{{ (p.amount / 100).toFixed(2) }} {{ p.currency }}</td>
           <td>{{ new Date(p.createdAt).toLocaleString() }}</td>
         </tr>

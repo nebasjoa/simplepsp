@@ -8,16 +8,20 @@ datasource db {
 }
 
 model Merchant {
-  id           String    @id @default(cuid())
-  name         String
-  email        String    @unique
-  passwordHash String
-  active       Boolean   @default(true)
-  apiKey       String    @unique
-  secret       String
-  webhookUrl   String?
-  createdAt    DateTime  @default(now())
-  payments     Payment[]
+  id               String    @id @default(cuid())
+  name             String
+  email            String    @unique
+  passwordHash     String
+  active           Boolean   @default(true)
+  apiKey           String    @unique
+  secret           String
+  webhookUrl       String?
+  createdAt        DateTime  @default(now())
+  payments         Payment[]
+
+  cardEnabled      Boolean   @default(true)
+  paypalEnabled    Boolean   @default(false)
+  googlePayEnabled Boolean   @default(false)
 }
 
 model Operator {
@@ -36,6 +40,7 @@ model Payment {
   reference      String
   status         String
   captureNow     Boolean
+  paymentMethod  String   @default("card")
   cardBrand      String?
   cardLast4      String?
   hostedToken    String?  @unique

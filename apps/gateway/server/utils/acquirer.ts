@@ -43,6 +43,39 @@ export async function chargeCard(
   }
 }
 
+export interface WalletChargeResult {
+  outcome: "approved";
+  reason: string;
+}
+
+export async function chargeWallet(
+  acquirerUrl: string,
+  method: "paypal" | "google_pay",
+  amount: number,
+  currency: string,
+  paymentId: string,
+): Promise<WalletChargeResult> {
+  const body = { method, amount, currency };
+  const startedAt = Date.now();
+  await logLine(
+    `ACQUIRER OUT      paymentId=${paymentId} -> POST ${acquirerUrl}/charge-wallet body=${formatBody(body)}`,
+  );
+
+  try {
+    const result = await $fetch<WalletChargeResult>(`${acquirerUrl}/charge-wallet`, { method: "POST", body });
+    await logLine(
+      `ACQUIRER IN       paymentId=${paymentId} <- ${Date.now() - startedAt}ms body=${formatBody(result)}`,
+    );
+    return result;
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    await logLine(
+      `ACQUIRER FAILED   paymentId=${paymentId} <- ${Date.now() - startedAt}ms error=${reason}`,
+    );
+    throw err;
+  }
+}
+
 export interface SettleItem {
   paymentId: string;
   amount: number;

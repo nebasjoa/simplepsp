@@ -13,8 +13,14 @@ export default defineEventHandler(async (event) => {
     amount: payment.amount,
     currency: payment.currency,
     reference: payment.reference,
+    paymentMethod: payment.paymentMethod,
     cardBrand: payment.cardBrand,
     cardLast4: payment.cardLast4,
     merchantName: payment.merchant.name,
+    enabledMethods: {
+      card: payment.merchant.cardEnabled,
+      paypal: payment.merchant.paypalEnabled,
+      google_pay: payment.merchant.googlePayEnabled,
+    },
   };
 });

@@ -1,3 +1,5 @@
+import type { PaymentMethod } from "./paymentMethods.js";
+
 export type PaymentStatus =
   | "initiated"
   | "authorized"
@@ -20,6 +22,9 @@ export interface Merchant {
   secret: string;
   webhookUrl: string | null;
   createdAt: Date;
+  cardEnabled: boolean;
+  paypalEnabled: boolean;
+  googlePayEnabled: boolean;
 }
 
 export interface Operator {
@@ -37,6 +42,7 @@ export interface Payment {
   reference: string;
   status: PaymentStatus;
   captureNow: boolean;
+  paymentMethod: PaymentMethod;
   cardBrand: string | null;
   cardLast4: string | null;
   hostedToken: string | null;

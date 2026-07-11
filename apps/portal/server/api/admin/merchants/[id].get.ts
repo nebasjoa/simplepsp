@@ -19,5 +19,8 @@ export default defineEventHandler(async (event) => {
     webhookUrl: merchant.webhookUrl,
     createdAt: merchant.createdAt,
     paymentCount: merchant._count.payments,
+    cardEnabled: merchant.cardEnabled,
+    paypalEnabled: merchant.paypalEnabled,
+    googlePayEnabled: merchant.googlePayEnabled,
   };
 });

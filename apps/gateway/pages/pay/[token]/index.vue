@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { detectBrand } from "@simplepsp/shared";
+import { detectBrand, PAYMENT_METHOD_CATALOG, type PaymentMethod } from "@simplepsp/shared";
 
 const route = useRoute();
 const token = route.params.token as string;
@@ -20,6 +20,23 @@ const BRAND_LABELS: Record<string, string> = {
 
 const brand = computed(() => detectBrand(cardNumber.value));
 const brandLabel = computed(() => BRAND_LABELS[brand.value] ?? "");
+
+const enabledMethods = computed(() => {
+  const flags = payment.value?.enabledMethods;
+  if (!flags) return [];
+  return PAYMENT_METHOD_CATALOG.filter((m) => flags[m.id]);
+});
+
+const activeMethod = ref<PaymentMethod>("card");
+watch(
+  enabledMethods,
+  (methods) => {
+    if (methods.length && !methods.some((m) => m.id === activeMethod.value)) {
+      activeMethod.value = methods[0]!.id;
+    }
+  },
+  { immediate: true },
+);
 
 const formattedAmount = computed(() => {
   if (!payment.value) return "";
@@ -66,7 +83,34 @@ function onCvcInput(event: Event) {
       <p class="pay-amount">{{ formattedAmount }}<span class="pay-currency">{{ payment.currency }}</span></p>
       <p class="pay-reference">Ref {{ payment.reference }}</p>
 
-      <form method="post" :action="`/pay/${token}`" class="card-form">
+      <div v-if="enabledMethods.length > 1" class="method-tabs">
+        <button
+          v-for="m in enabledMethods"
+          :key="m.id"
+          type="button"
+          class="method-tab"
+          :class="{ 'method-tab--active': activeMethod === m.id }"
+          @click="activeMethod = m.id"
+        >
+          {{ m.label }}
+        </button>
+      </div>
+
+      <div v-if="activeMethod !== 'card'" class="wallet-block">
+        <p class="wallet-copy">
+          Simulated {{ PAYMENT_METHOD_CATALOG.find((m) => m.id === activeMethod)?.label }} checkout
+          <InfoTip text="This is a dummy wallet button - no real PayPal/Google Pay integration exists. It submits straight to the gateway and always approves instantly, to demonstrate that a real gateway would route this payment method through a different rail than the card form." />
+        </p>
+        <form method="post" :action="`/pay/${token}/wallet`">
+          <input type="hidden" name="method" :value="activeMethod" />
+          <button type="submit" class="pay-button">
+            Pay {{ formattedAmount }} {{ payment.currency }} with
+            {{ PAYMENT_METHOD_CATALOG.find((m) => m.id === activeMethod)?.label }}
+          </button>
+        </form>
+      </div>
+
+      <form v-if="activeMethod === 'card'" method="post" :action="`/pay/${token}`" class="card-form">
         <label class="field">
           <span class="field-label">Card number</span>
           <div class="card-number-field">
@@ -131,9 +175,9 @@ function onCvcInput(event: Event) {
         <button type="submit" class="pay-button">Pay {{ formattedAmount }} {{ payment.currency }}</button>
       </form>
 
-      <p class="pay-security">Test data only. No real card network is contacted.</p>
+      <p v-if="activeMethod === 'card'" class="pay-security">Test data only. No real card network is contacted.</p>
 
-      <details class="test-cards">
+      <details v-if="activeMethod === 'card'" class="test-cards">
         <summary>Demo test cards</summary>
         <ul>
           <li><code>4242 4242 4242 4242</code><span>Approved</span></li>
@@ -205,6 +249,52 @@ function onCvcInput(event: Event) {
   margin: 0.35rem 0 2rem;
   font-size: 0.85rem;
   color: rgba(18, 20, 28, 0.5);
+}
+
+.method-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid rgba(18, 20, 28, 0.12);
+  border-radius: 9px;
+  padding: 0.25rem;
+}
+
+.method-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: rgba(18, 20, 28, 0.55);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.5rem 0.6rem;
+  border-radius: 7px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.method-tab--active {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.wallet-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.wallet-copy {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.85rem;
+  color: rgba(18, 20, 28, 0.6);
 }
 
 .card-form {

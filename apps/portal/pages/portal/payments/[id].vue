@@ -1,8 +1,14 @@
 <script setup lang="ts">
+import { PAYMENT_METHOD_CATALOG } from "@simplepsp/shared";
+
 definePageMeta({ middleware: "merchant-auth", layout: "portal" });
 
 const route = useRoute();
 const { data: payment } = await useFetch(`/api/portal/payments/${route.params.id}`);
+
+function methodLabel(id: string): string {
+  return PAYMENT_METHOD_CATALOG.find((m) => m.id === id)?.label ?? id;
+}
 </script>
 
 <template>
@@ -11,10 +17,13 @@ const { data: payment } = await useFetch(`/api/portal/payments/${route.params.id
     <h1>{{ payment.reference }}</h1>
     <p>
       <strong>{{ payment.status }}</strong> &mdash; {{ (payment.amount / 100).toFixed(2) }} {{ payment.currency }}
-      <span v-if="payment.cardBrand">&middot; {{ payment.cardBrand }} •••• {{ payment.cardLast4 }}</span>
+      <span>&middot; {{ methodLabel(payment.paymentMethod) }}</span>
+      <span v-if="payment.paymentMethod === 'card' && payment.cardBrand">&middot; {{ payment.cardBrand }} •••• {{ payment.cardLast4 }}</span>
       <InfoTip
+        v-if="payment.paymentMethod === 'card'"
         text="Only the card brand and last 4 digits are ever stored - the full card number never touches this database, even for a demo."
       />
+      <InfoTip v-else text="This payment used a dummy wallet method - no card data was ever collected for it." />
     </p>
     <p style="color: #666; font-size: 0.85rem">
       Created {{ new Date(payment.createdAt).toLocaleString() }} &middot; Updated
