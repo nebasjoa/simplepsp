@@ -1,0 +1,18 @@
+{
+  "name": "@simplepsp/acquirer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cross-env PORT=4102 nitro dev",
+    "build": "nitro build",
+    "typecheck": "nitro prepare && tsc --noEmit -p .nitro/types/tsconfig.json"
+  },
+  "dependencies": {
+    "@simplepsp/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "nitropack": "^2.10.0",
+    "typescript": "^5.7.0"
+  }
+}

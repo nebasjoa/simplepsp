@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Merchant {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  active       Boolean   @default(true)
+  apiKey       String    @unique
+  secret       String
+  webhookUrl   String?
+  createdAt    DateTime  @default(now())
+  payments     Payment[]
+}
+
+model Operator {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Payment {
+  id             String   @id @default(cuid())
+  merchantId     String
+  merchant       Merchant @relation(fields: [merchantId], references: [id])
+  amount         Int
+  currency       String
+  reference      String
+  status         String
+  captureNow     Boolean
+  cardBrand      String?
+  cardLast4      String?
+  hostedToken    String?  @unique
+  idempotencyKey String?
+  idempotencyBodyHash String?
+  returnUrl      String
+  webhookUrl     String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  refunds        Refund[]
+
+  @@unique([merchantId, idempotencyKey])
+}
+
+model Refund {
+  id        String   @id @default(cuid())
+  paymentId String
+  payment   Payment  @relation(fields: [paymentId], references: [id])
+  amount    Int
+  status    String
+  createdAt DateTime @default(now())
+}
+
+model WebhookDelivery {
+  id        String   @id @default(cuid())
+  paymentId String
+  eventType String
+  status    String
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+}

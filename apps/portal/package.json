@@ -1,0 +1,24 @@
+{
+  "name": "@simplepsp/portal",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cross-env PORT=4103 nuxt dev",
+    "build": "nuxt build",
+    "typecheck": "nuxt typecheck",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.5.0",
+    "@simplepsp/shared": "workspace:*",
+    "nuxt": "^3.15.0",
+    "nuxt-auth-utils": "^0.5.0",
+    "vue": "^3.5.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "typescript": "^5.7.0",
+    "vue-tsc": "^2.1.0"
+  }
+}

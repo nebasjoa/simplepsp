@@ -1,0 +1,23 @@
+{
+  "name": "simplepsp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "corepack pnpm -r --parallel --filter \"./apps/*\" dev",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "test": "playwright test",
+    "typecheck": "corepack pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@prisma/client": "^6.5.0",
+    "@playwright/test": "^1.51.0",
+    "@simplepsp/shared": "workspace:*",
+    "prisma": "^6.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
