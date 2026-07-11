@@ -2,9 +2,11 @@
   "name": "simplepsp",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.11.0",
   "scripts": {
     "dev": "corepack pnpm -r --parallel --filter \"./apps/*\" dev",
     "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "test": "playwright test",
     "typecheck": "corepack pnpm -r typecheck"

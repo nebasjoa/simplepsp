@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "cross-env PORT=4103 nuxt dev",
     "build": "nuxt build",
+    "start": "node .output/server/index.mjs",
     "typecheck": "nuxt typecheck",
     "postinstall": "nuxt prepare"
   },

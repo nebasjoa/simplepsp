@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "cross-env PORT=4102 nitro dev",
     "build": "nitro build",
+    "start": "node .output/server/index.mjs",
     "typecheck": "nitro prepare && tsc --noEmit -p .nitro/types/tsconfig.json"
   },
   "dependencies": {
