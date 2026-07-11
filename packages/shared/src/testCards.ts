@@ -38,12 +38,12 @@ export function last4(cardNumber: string): string {
 }
 
 const CATALOG_LABELS: Record<string, string> = {
-  "4242424242424242": "Visa — approved",
-  "4000000000000002": "Visa — declined (generic)",
-  "4000000000009995": "Visa — declined (insufficient funds)",
-  "4000000000000069": "Visa — declined (expired card)",
-  "4000000000000119": "Visa — processing error",
-  "4000000000003220": "Visa — requires 3DS",
+  "4242424242424242": "Visa - approved",
+  "4000000000000002": "Visa - declined (generic)",
+  "4000000000009995": "Visa - declined (insufficient funds)",
+  "4000000000000069": "Visa - declined (expired card)",
+  "4000000000000119": "Visa - processing error",
+  "4000000000003220": "Visa - requires 3DS",
 };
 
 export interface TestCardCatalogEntry extends TestCardResult {
@@ -51,7 +51,7 @@ export interface TestCardCatalogEntry extends TestCardResult {
   label: string;
 }
 
-/** Same catalog as TEST_CARDS, with display labels — for demo UIs that let a user pick a test card. */
+/** Same catalog as TEST_CARDS, with display labels - for demo UIs that let a user pick a test card. */
 export const TEST_CARD_CATALOG: TestCardCatalogEntry[] = Object.entries(TEST_CARDS).map(([number, result]) => ({
   number,
   label: CATALOG_LABELS[number] ?? number,

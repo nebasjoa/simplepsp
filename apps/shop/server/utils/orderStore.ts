@@ -11,7 +11,7 @@ export interface OrderRecord {
   updatedAt: string;
 }
 
-/** In-memory only — the shop has no database in this demo, the point is the reconciliation flow itself. */
+/** In-memory only - the shop has no database in this demo, the point is the reconciliation flow itself. */
 const orders = new Map<string, OrderRecord>();
 
 export function recordOrderUpdate(record: OrderRecord) {

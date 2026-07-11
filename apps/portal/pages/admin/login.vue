@@ -22,8 +22,11 @@ async function login() {
 
 <template>
   <div style="max-width: 360px; margin: 4rem auto; font-family: sans-serif">
-    <h1>Operator login</h1>
-    <p style="color: #666; font-size: 0.85rem">Gateway staff area — separate from merchant accounts.</p>
+    <h1>
+      Operator login
+      <InfoTip text="Operator sessions are a separate namespace from merchant sessions - operators manage merchants here but can never sign into a merchant's own portal with this login." />
+    </h1>
+    <p style="color: #666; font-size: 0.85rem">Gateway staff area - separate from merchant accounts.</p>
     <form @submit.prevent="login">
       <p><label>Email<br /><input v-model="email" type="email" required /></label></p>
       <p><label>Password<br /><input v-model="password" type="password" required /></label></p>

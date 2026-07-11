@@ -12,13 +12,19 @@ const { data: payment } = await useFetch(`/api/portal/payments/${route.params.id
     <p>
       <strong>{{ payment.status }}</strong> &mdash; {{ (payment.amount / 100).toFixed(2) }} {{ payment.currency }}
       <span v-if="payment.cardBrand">&middot; {{ payment.cardBrand }} •••• {{ payment.cardLast4 }}</span>
+      <InfoTip
+        text="Only the card brand and last 4 digits are ever stored - the full card number never touches this database, even for a demo."
+      />
     </p>
     <p style="color: #666; font-size: 0.85rem">
       Created {{ new Date(payment.createdAt).toLocaleString() }} &middot; Updated
       {{ new Date(payment.updatedAt).toLocaleString() }}
     </p>
 
-    <h2>Refunds</h2>
+    <h2>
+      Refunds
+      <InfoTip text="A refund can be partial or cover the full captured amount. Refunds only move forward - a captured payment can't go back to authorized." />
+    </h2>
     <p v-if="!payment.refunds.length" style="color: #666">No refunds yet.</p>
     <table v-else style="width: 100%; border-collapse: collapse">
       <thead>
@@ -37,7 +43,12 @@ const { data: payment } = await useFetch(`/api/portal/payments/${route.params.id
       </tbody>
     </table>
 
-    <h2>Webhook deliveries</h2>
+    <h2>
+      Webhook deliveries
+      <InfoTip
+        text="This is the signed server-to-server notification the gateway sends on every terminal status change. It, not the browser redirect, is the source of truth the shop reconciles against."
+      />
+    </h2>
     <p v-if="!payment.webhookDeliveries.length" style="color: #666">No webhook attempts yet.</p>
     <table v-else style="width: 100%; border-collapse: collapse">
       <thead>

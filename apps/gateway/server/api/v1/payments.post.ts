@@ -85,10 +85,15 @@ export default defineEventHandler(async (event) => {
 
     await sendWebhook(merchant, updated);
 
+    const reason =
+      charge.outcome === "requires_3ds"
+        ? "This card requires 3D Secure authentication, which the direct (server-to-server) flow can't complete -- there's no browser to challenge. Use the hosted flow instead."
+        : charge.reason;
+
     setResponseStatus(event, 201);
     return {
       ...toResponse(updated, config),
-      ...(charge.outcome === "approved" ? {} : { reason: charge.reason }),
+      ...(charge.outcome === "approved" ? {} : { reason }),
     };
   }
 

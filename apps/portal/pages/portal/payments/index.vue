@@ -33,12 +33,15 @@ watch([status, reference], () => {
 <template>
   <div>
     <h1>Payments</h1>
-    <div style="display: flex; gap: 1rem; margin-bottom: 1rem">
+    <div style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center">
       <input v-model="reference" placeholder="Filter by reference" />
       <select v-model="status">
         <option value="">All statuses</option>
         <option v-for="s in STATUSES" :key="s" :value="s">{{ s }}</option>
       </select>
+      <InfoTip
+        text="Status moves through a strict state machine, e.g. initiated -> authorized -> captured -> refunded. Illegal jumps (like captured straight to authorized) are rejected server-side, never silently allowed."
+      />
     </div>
 
     <table style="width: 100%; border-collapse: collapse">

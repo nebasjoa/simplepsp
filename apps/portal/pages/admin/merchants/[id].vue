@@ -50,14 +50,18 @@ async function resetPortalPassword() {
 <template>
   <div v-if="merchant">
     <p><NuxtLink to="/admin/merchants">← Merchants</NuxtLink></p>
+    <OwnerNote role="Merchant record" :name="merchant.name" :email="merchant.email" />
     <h1>{{ merchant.name }}</h1>
     <p>{{ merchant.email }} &middot; {{ merchant.active ? "Active" : "Disabled" }} &middot; {{ merchant.paymentCount }} payments</p>
     <p>API key: <code>{{ merchant.apiKey }}</code></p>
 
     <p>
       <button :disabled="busy" @click="toggleActive">{{ merchant.active ? "Disable" : "Enable" }} merchant</button>
+      <InfoTip text="Disabling blocks this merchant everywhere: their API keys stop authenticating (401) and their portal login is refused." />
       <button :disabled="busy" @click="rotateSecret" style="margin-left: 0.5rem">Rotate secret</button>
+      <InfoTip text="Generates a new HMAC secret and invalidates the old one immediately. Shown once here, then never retrievable again." />
       <button :disabled="busy" @click="resetPortalPassword" style="margin-left: 0.5rem">Reset portal password</button>
+      <InfoTip text="Sets a new portal login password for this merchant, shown once. Useful if they've lost access - doesn't touch their API credentials." />
     </p>
 
     <p v-if="rotatedSecret" style="border: 1px solid #ddd; padding: 0.5rem">

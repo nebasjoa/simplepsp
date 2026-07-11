@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
 
   const payload = JSON.parse(rawBody) as WebhookPayload;
 
-  // The browser redirect can be lost (closed tab, network drop) — this signed webhook is the
+  // The browser redirect can be lost (closed tab, network drop) - this signed webhook is the
   // source of truth the shop reconciles its local order against, not the query-string redirect.
   recordOrderUpdate({
     id: payload.paymentId,

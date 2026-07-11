@@ -6,7 +6,12 @@ const { data } = await useFetch("/api/portal/overview");
 
 <template>
   <div>
-    <h1>Overview</h1>
+    <h1>
+      Overview
+      <InfoTip
+        text="Totals and payments below only ever include this merchant account - the server derives merchantId from your session, not from anything in the page."
+      />
+    </h1>
     <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0">
       <div
         v-for="t in data?.totals"
@@ -20,7 +25,10 @@ const { data } = await useFetch("/api/portal/overview");
       <p v-if="!data?.totals.length" style="color: #666">No payments yet.</p>
     </div>
 
-    <h2>Recent payments</h2>
+    <h2>
+      Recent payments
+      <InfoTip text="Each row is one payment attempt through either the hosted or direct flow. Click a reference to see its full status timeline." />
+    </h2>
     <table style="width: 100%; border-collapse: collapse">
       <thead>
         <tr style="text-align: left; border-bottom: 1px solid #ddd">

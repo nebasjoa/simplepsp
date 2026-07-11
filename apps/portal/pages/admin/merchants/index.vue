@@ -17,7 +17,10 @@ const { data: merchants } = await useFetch("/api/admin/merchants");
         <tr style="text-align: left; border-bottom: 1px solid #ddd">
           <th>Name</th>
           <th>Email</th>
-          <th>Status</th>
+          <th>
+            Status
+            <InfoTip text="Disabling a merchant is enforced in two places: the HMAC middleware rejects their API calls with 401, and their portal login is refused - not just hidden in the UI." />
+          </th>
           <th>Payments</th>
           <th></th>
         </tr>

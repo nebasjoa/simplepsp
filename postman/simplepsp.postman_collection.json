@@ -1,0 +1,804 @@
+{
+  "info": {
+    "_postman_id": "b3f2a6b0-1c2d-4e3f-9a8b-7c6d5e4f3a2b",
+    "name": "SimplePSP - Demo Payment Gateway",
+    "description": "Exercises the SimplePSP demo gateway end to end: the signed REST API (direct + hosted flows, capture/refund/void, idempotency), the merchant portal, the operator admin area, the shop, and the mock acquirer.\n\n**Before running:**\n1. `pnpm dev` (starts shop:4100, gateway:4101, acquirer:4102, portal:4103)\n2. `pnpm db:migrate && pnpm db:seed` - prints the operator password and demo merchant credentials (`pk_demo` / `sk_demo_secret` are fixed, the operator password is random each seed run)\n3. Paste the printed operator password into the `operatorPassword` collection variable before using the Admin folder.\n\nThe **Gateway API** folder auto-signs every request with HMAC-SHA256 via a folder-level pre-request script, exactly like `packages/shared/src/hmac.ts` - no manual header work needed. The **Portal** and **Admin** folders rely on Postman's cookie jar for the sealed-cookie session set by login.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "gatewayUrl", "value": "http://localhost:4101", "type": "string" },
+    { "key": "shopUrl", "value": "http://localhost:4100", "type": "string" },
+    { "key": "acquirerUrl", "value": "http://localhost:4102", "type": "string" },
+    { "key": "portalUrl", "value": "http://localhost:4103", "type": "string" },
+    { "key": "apiKey", "value": "pk_demo", "type": "string" },
+    { "key": "apiSecret", "value": "sk_demo_secret", "type": "string" },
+    { "key": "paymentId", "value": "", "type": "string" },
+    { "key": "merchantId", "value": "", "type": "string" },
+    { "key": "idempotencyKey", "value": "demo-idem-key-1", "type": "string" },
+    { "key": "merchantEmail", "value": "merchant@demo.test", "type": "string" },
+    { "key": "merchantPassword", "value": "demo_password", "type": "string" },
+    { "key": "operatorEmail", "value": "admin@demo.test", "type": "string" },
+    { "key": "operatorPassword", "value": "REPLACE_WITH_PRINTED_SEED_PASSWORD", "type": "string" },
+    { "key": "newMerchantId", "value": "", "type": "string" },
+    { "key": "newMerchantApiKey", "value": "", "type": "string" },
+    { "key": "newMerchantSecret", "value": "", "type": "string" },
+    { "key": "newMerchantPassword", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Gateway API (HMAC signed)",
+      "description": "Every request here is signed automatically: X-Api-Key, X-Timestamp, and X-Signature are computed by the folder's pre-request script over `${timestamp}.${rawBody}` using apiSecret, exactly matching packages/shared/src/hmac.ts.",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const secret = pm.collectionVariables.get(\"apiSecret\");",
+              "const apiKey = pm.collectionVariables.get(\"apiKey\");",
+              "const timestamp = Math.floor(Date.now() / 1000);",
+              "",
+              "let rawBody = \"\";",
+              "if (pm.request.body && pm.request.body.mode === \"raw\" && pm.request.body.raw) {",
+              "  rawBody = pm.variables.replaceIn(pm.request.body.raw);",
+              "}",
+              "",
+              "const signature = CryptoJS.HmacSHA256(`${timestamp}.${rawBody}`, secret).toString(CryptoJS.enc.Hex);",
+              "",
+              "pm.request.headers.upsert({ key: \"X-Api-Key\", value: apiKey });",
+              "pm.request.headers.upsert({ key: \"X-Timestamp\", value: String(timestamp) });",
+              "pm.request.headers.upsert({ key: \"X-Signature\", value: signature });"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "Create Payment - Hosted",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1099,\n  \"currency\": \"EUR\",\n  \"reference\": \"postman_hosted_{{$timestamp}}\",\n  \"captureNow\": true,\n  \"returnUrl\": \"https://example.com/return\",\n  \"webhookUrl\": \"https://example.com/webhook\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{gatewayUrl}}/api/v1/payments", "host": ["{{gatewayUrl}}"], "path": ["api", "v1", "payments"] },
+            "description": "No `card` in the body -> the gateway returns a `redirectUrl` to its hosted payment form instead of a final status."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"has redirectUrl\", () => pm.expect(json.redirectUrl).to.be.a(\"string\"));",
+                  "pm.collectionVariables.set(\"paymentId\", json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Payment - Direct (Approved)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1500,\n  \"currency\": \"EUR\",\n  \"reference\": \"postman_direct_ok_{{$timestamp}}\",\n  \"captureNow\": true,\n  \"returnUrl\": \"https://example.com/return\",\n  \"webhookUrl\": \"https://example.com/webhook\",\n  \"card\": { \"number\": \"4242424242424242\", \"expMonth\": 12, \"expYear\": 2030, \"cvc\": \"123\" }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{gatewayUrl}}/api/v1/payments", "host": ["{{gatewayUrl}}"], "path": ["api", "v1", "payments"] },
+            "description": "Card present -> direct (server-to-server) flow. The acquirer approves this test card synchronously and the response already carries the final status."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status is captured\", () => pm.expect(json.status).to.eql(\"captured\"));",
+                  "pm.collectionVariables.set(\"paymentId\", json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Payment - Direct (Declined)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1500,\n  \"currency\": \"EUR\",\n  \"reference\": \"postman_direct_decline_{{$timestamp}}\",\n  \"captureNow\": true,\n  \"returnUrl\": \"https://example.com/return\",\n  \"webhookUrl\": \"https://example.com/webhook\",\n  \"card\": { \"number\": \"4000000000000002\", \"expMonth\": 12, \"expYear\": 2030, \"cvc\": \"123\" }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{gatewayUrl}}/api/v1/payments", "host": ["{{gatewayUrl}}"], "path": ["api", "v1", "payments"] },
+            "description": "Uses the generic-decline test card from packages/shared/src/testCards.ts."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status is declined\", () => pm.expect(json.status).to.eql(\"declined\"));",
+                  "pm.test(\"has a decline reason\", () => pm.expect(json.reason).to.be.a(\"string\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Payment - Auth Only (for capture/refund/void)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 2000,\n  \"currency\": \"EUR\",\n  \"reference\": \"postman_auth_only_{{$timestamp}}\",\n  \"captureNow\": false,\n  \"returnUrl\": \"https://example.com/return\",\n  \"webhookUrl\": \"https://example.com/webhook\",\n  \"card\": { \"number\": \"4242424242424242\", \"expMonth\": 12, \"expYear\": 2030, \"cvc\": \"123\" }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{gatewayUrl}}/api/v1/payments", "host": ["{{gatewayUrl}}"], "path": ["api", "v1", "payments"] },
+            "description": "`captureNow: false` -> stops at `authorized` instead of collapsing straight to `captured`. Run this right before the Capture / Refund / Void requests below - it sets the `paymentId` variable they use."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"status is authorized\", () => pm.expect(json.status).to.eql(\"authorized\"));",
+                  "pm.collectionVariables.set(\"paymentId\", json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Payment Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/payments/{{paymentId}}",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "v1", "payments", "{{paymentId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": ["pm.test(\"200 OK\", () => pm.response.to.have.status(200));"] }
+            }
+          ]
+        },
+        {
+          "name": "Capture Payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/payments/{{paymentId}}/capture",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "v1", "payments", "{{paymentId}}", "capture"]
+            },
+            "description": "Only legal from `authorized`. Run \"Create Payment - Auth Only\" first."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status is captured\", () => pm.expect(pm.response.json().status).to.eql(\"captured\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refund Payment (Partial)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"amount\": 500\n}", "options": { "raw": { "language": "json" } } },
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/payments/{{paymentId}}/refund",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "v1", "payments", "{{paymentId}}", "refund"]
+            },
+            "description": "Only legal from `captured` or `partially_refunded`. Run \"Capture Payment\" first."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status is partially_refunded\", () => pm.expect(pm.response.json().status).to.eql(\"partially_refunded\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refund Payment (Remaining)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/payments/{{paymentId}}/refund",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "v1", "payments", "{{paymentId}}", "refund"]
+            },
+            "description": "No `amount` -> refunds whatever is left. Run right after \"Refund Payment (Partial)\"."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status is refunded\", () => pm.expect(pm.response.json().status).to.eql(\"refunded\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Void Payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/payments/{{paymentId}}/void",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "v1", "payments", "{{paymentId}}", "void"]
+            },
+            "description": "Only legal from `authorized` - i.e. run \"Create Payment - Auth Only\" and then this, WITHOUT capturing in between (capture/void are mutually exclusive from that state)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status is voided\", () => pm.expect(pm.response.json().status).to.eql(\"voided\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Idempotency - Create (1st send)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 750,\n  \"currency\": \"EUR\",\n  \"reference\": \"postman_idempotency_demo\",\n  \"captureNow\": true,\n  \"returnUrl\": \"https://example.com/return\",\n  \"webhookUrl\": \"https://example.com/webhook\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{gatewayUrl}}/api/v1/payments", "host": ["{{gatewayUrl}}"], "path": ["api", "v1", "payments"] },
+            "description": "Send this twice in a row (unchanged) - the second send returns the exact same payment id instead of creating a duplicate. Then try \"Idempotency - Conflict\" to see the 409 case."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const previous = pm.collectionVariables.get(\"lastIdempotentId\");",
+                  "const current = pm.response.json().id;",
+                  "if (previous) {",
+                  "  pm.test(\"replay returns the same payment id\", () => pm.expect(current).to.eql(previous));",
+                  "}",
+                  "pm.collectionVariables.set(\"lastIdempotentId\", current);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Idempotency - Conflict (different body, same key)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 999,\n  \"currency\": \"EUR\",\n  \"reference\": \"postman_idempotency_demo\",\n  \"captureNow\": true,\n  \"returnUrl\": \"https://example.com/return\",\n  \"webhookUrl\": \"https://example.com/webhook\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{gatewayUrl}}/api/v1/payments", "host": ["{{gatewayUrl}}"], "path": ["api", "v1", "payments"] },
+            "description": "Same Idempotency-Key as the request above, but a different `amount` -> the gateway must refuse to guess which body was intended."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"409 Conflict\", () => pm.response.to.have.status(409));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gateway API - Auth Failure Demos",
+      "description": "Each request deliberately breaks one part of the signature scheme to show the corresponding rejection. No folder-level signing here - each request builds its own (broken) headers.",
+      "item": [
+        {
+          "name": "401 - Missing API Key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/payments/{{paymentId}}",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "v1", "payments", "{{paymentId}}"]
+            },
+            "description": "No X-Api-Key header at all."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": ["pm.test(\"401 Unauthorized\", () => pm.response.to.have.status(401));"] }
+            }
+          ]
+        },
+        {
+          "name": "401 - Invalid Signature",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const timestamp = Math.floor(Date.now() / 1000);",
+                  "pm.request.headers.upsert({ key: \"X-Api-Key\", value: pm.collectionVariables.get(\"apiKey\") });",
+                  "pm.request.headers.upsert({ key: \"X-Timestamp\", value: String(timestamp) });",
+                  "pm.request.headers.upsert({ key: \"X-Signature\", value: \"0\".repeat(64) });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": ["pm.test(\"401 Unauthorized\", () => pm.response.to.have.status(401));"] }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/payments/{{paymentId}}",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "v1", "payments", "{{paymentId}}"]
+            },
+            "description": "Valid api key + timestamp, but a bogus (all-zero) signature."
+          }
+        },
+        {
+          "name": "401 - Expired Timestamp",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const secret = pm.collectionVariables.get(\"apiSecret\");",
+                  "const apiKey = pm.collectionVariables.get(\"apiKey\");",
+                  "const staleTimestamp = Math.floor(Date.now() / 1000) - 400;",
+                  "const rawBody = \"\";",
+                  "const signature = CryptoJS.HmacSHA256(`${staleTimestamp}.${rawBody}`, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.request.headers.upsert({ key: \"X-Api-Key\", value: apiKey });",
+                  "pm.request.headers.upsert({ key: \"X-Timestamp\", value: String(staleTimestamp) });",
+                  "pm.request.headers.upsert({ key: \"X-Signature\", value: signature });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": ["pm.test(\"401 Unauthorized\", () => pm.response.to.have.status(401));"] }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/payments/{{paymentId}}",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "v1", "payments", "{{paymentId}}"]
+            },
+            "description": "Correctly signed, but the timestamp is 400 seconds old - past the 300s replay-protection window."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Portal (Merchant Session)",
+      "description": "Session-cookie auth (nuxt-auth-utils). Run \"Merchant Login\" first - Postman's cookie jar carries the session to the rest of these requests automatically.",
+      "item": [
+        {
+          "name": "Merchant Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{merchantEmail}}\",\n  \"password\": \"{{merchantPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{portalUrl}}/api/portal/login", "host": ["{{portalUrl}}"], "path": ["api", "portal", "login"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": ["pm.test(\"200 OK\", () => pm.response.to.have.status(200));"] }
+            }
+          ]
+        },
+        {
+          "name": "Get Overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{portalUrl}}/api/portal/overview", "host": ["{{portalUrl}}"], "path": ["api", "portal", "overview"] }
+          }
+        },
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{portalUrl}}/api/portal/payments?page=1&pageSize=20",
+              "host": ["{{portalUrl}}"],
+              "path": ["api", "portal", "payments"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Payment Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{portalUrl}}/api/portal/payments/{{paymentId}}",
+              "host": ["{{portalUrl}}"],
+              "path": ["api", "portal", "payments", "{{paymentId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Credentials",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{portalUrl}}/api/portal/credentials", "host": ["{{portalUrl}}"], "path": ["api", "portal", "credentials"] }
+          }
+        },
+        {
+          "name": "Rotate Secret",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{portalUrl}}/api/portal/credentials/rotate-secret",
+              "host": ["{{portalUrl}}"],
+              "path": ["api", "portal", "credentials", "rotate-secret"]
+            },
+            "description": "Shown once. This also updates the `apiSecret` collection variable so the Gateway API folder keeps working with the new secret."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"apiSecret\", pm.response.json().secret);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Set Default Webhook URL",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"webhookUrl\": \"https://example.com/webhooks/gateway\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{portalUrl}}/api/portal/credentials/webhook-url",
+              "host": ["{{portalUrl}}"],
+              "path": ["api", "portal", "credentials", "webhook-url"]
+            }
+          }
+        },
+        {
+          "name": "Fire Test Payment (Hosted)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mode\": \"hosted\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": {
+              "raw": "{{portalUrl}}/api/portal/test-payment",
+              "host": ["{{portalUrl}}"],
+              "path": ["api", "portal", "test-payment"]
+            },
+            "description": "Signs a real request to the gateway using this merchant's own stored credentials - returns a redirectUrl to the hosted form."
+          }
+        },
+        {
+          "name": "Fire Test Payment (Direct)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"direct\",\n  \"cardNumber\": \"4242424242424242\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{portalUrl}}/api/portal/test-payment",
+              "host": ["{{portalUrl}}"],
+              "path": ["api", "portal", "test-payment"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin (Operator Session)",
+      "description": "Separate session namespace from the merchant portal - an operator session cannot call /api/portal/* and vice versa. Run \"Operator Login\" first (set `operatorPassword` from your `pnpm db:seed` output).",
+      "item": [
+        {
+          "name": "Operator Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{operatorEmail}}\",\n  \"password\": \"{{operatorPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{portalUrl}}/api/admin/login", "host": ["{{portalUrl}}"], "path": ["api", "admin", "login"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": ["pm.test(\"200 OK\", () => pm.response.to.have.status(200));"] }
+            }
+          ]
+        },
+        {
+          "name": "List Merchants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{portalUrl}}/api/admin/merchants", "host": ["{{portalUrl}}"], "path": ["api", "admin", "merchants"] }
+          }
+        },
+        {
+          "name": "Create Merchant",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Test Merchant\",\n  \"email\": \"postman-{{$timestamp}}@demo.test\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{portalUrl}}/api/admin/merchants", "host": ["{{portalUrl}}"], "path": ["api", "admin", "merchants"] },
+            "description": "apiKey, secret, and the initial portal password are shown once - captured here into newMerchant* collection variables."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201-ish (2xx) response\", () => pm.expect(pm.response.code).to.be.within(200, 201));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"merchantId\", json.id);",
+                  "pm.collectionVariables.set(\"newMerchantId\", json.id);",
+                  "pm.collectionVariables.set(\"newMerchantApiKey\", json.apiKey);",
+                  "pm.collectionVariables.set(\"newMerchantSecret\", json.secret);",
+                  "pm.collectionVariables.set(\"newMerchantPassword\", json.initialPassword);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Merchant",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{portalUrl}}/api/admin/merchants/{{merchantId}}",
+              "host": ["{{portalUrl}}"],
+              "path": ["api", "admin", "merchants", "{{merchantId}}"]
+            }
+          }
+        },
+        {
+          "name": "Disable Merchant",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"active\": false\n}", "options": { "raw": { "language": "json" } } },
+            "url": {
+              "raw": "{{portalUrl}}/api/admin/merchants/{{merchantId}}",
+              "host": ["{{portalUrl}}"],
+              "path": ["api", "admin", "merchants", "{{merchantId}}"]
+            }
+          }
+        },
+        {
+          "name": "Enable Merchant",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"active\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": {
+              "raw": "{{portalUrl}}/api/admin/merchants/{{merchantId}}",
+              "host": ["{{portalUrl}}"],
+              "path": ["api", "admin", "merchants", "{{merchantId}}"]
+            }
+          }
+        },
+        {
+          "name": "Rotate Merchant Secret",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{portalUrl}}/api/admin/merchants/{{merchantId}}/rotate-secret",
+              "host": ["{{portalUrl}}"],
+              "path": ["api", "admin", "merchants", "{{merchantId}}", "rotate-secret"]
+            }
+          }
+        },
+        {
+          "name": "Reset Merchant Portal Password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{portalUrl}}/api/admin/merchants/{{merchantId}}/reset-password",
+              "host": ["{{portalUrl}}"],
+              "path": ["api", "admin", "merchants", "{{merchantId}}", "reset-password"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shop",
+      "description": "The demo storefront's own tiny API - what a real merchant integration looks like from the outside.",
+      "item": [
+        {
+          "name": "Checkout - Hosted",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mode\": \"hosted\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{shopUrl}}/api/checkout", "host": ["{{shopUrl}}"], "path": ["api", "checkout"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["const json = pm.response.json();", "if (json.id) pm.collectionVariables.set(\"paymentId\", json.id);"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Checkout - Direct",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"direct\",\n  \"cardNumber\": \"4242424242424242\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{shopUrl}}/api/checkout", "host": ["{{shopUrl}}"], "path": ["api", "checkout"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["const json = pm.response.json();", "if (json.id) pm.collectionVariables.set(\"paymentId\", json.id);"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payment Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{shopUrl}}/api/payment-status?paymentId={{paymentId}}",
+              "host": ["{{shopUrl}}"],
+              "path": ["api", "payment-status"],
+              "query": [{ "key": "paymentId", "value": "{{paymentId}}" }]
+            },
+            "description": "Reads the shop's locally reconciled order (populated by the signed webhook), falling back to asking the gateway directly."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Acquirer (Mock Bank)",
+      "description": "The internal service the gateway calls - decides purely from the card number, deterministically. Not signed, not meant to be called by merchants directly; included here just to see it in isolation.",
+      "item": [
+        {
+          "name": "Charge - Approved",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cardNumber\": \"4242424242424242\",\n  \"amount\": 1000,\n  \"currency\": \"EUR\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{acquirerUrl}}/charge", "host": ["{{acquirerUrl}}"], "path": ["charge"] }
+          }
+        },
+        {
+          "name": "Charge - Declined",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cardNumber\": \"4000000000000002\",\n  \"amount\": 1000,\n  \"currency\": \"EUR\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{acquirerUrl}}/charge", "host": ["{{acquirerUrl}}"], "path": ["charge"] }
+          }
+        }
+      ]
+    }
+  ]
+}

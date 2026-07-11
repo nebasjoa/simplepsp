@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { TEST_CARD_CATALOG } from "@simplepsp/shared";
 
+const config = useRuntimeConfig();
 const loading = ref(false);
 const selectedCard = ref(TEST_CARD_CATALOG[0]!.number);
 
@@ -29,11 +30,15 @@ async function checkoutDirect() {
 
 <template>
   <div style="max-width: 480px; margin: 3rem auto; font-family: sans-serif">
+    <OwnerNote role="Storefront merchant" :name="config.public.gatewayApiKey" />
     <h1>Demo Shop</h1>
     <p>Widget &mdash; 10.99 EUR</p>
 
     <section style="margin-bottom: 1.5rem">
-      <h2 style="font-size: 1rem">Hosted (redirect) checkout</h2>
+      <h2 style="font-size: 1rem">
+        Hosted (redirect) checkout
+        <InfoTip text="This is the pattern real gateways steer merchants toward - card data never reaches the merchant's own server or PCI scope." />
+      </h2>
       <p style="color: #666; font-size: 0.85rem">
         Card data is entered on the gateway's hosted page &mdash; the shop never sees it.
       </p>
@@ -43,7 +48,10 @@ async function checkoutDirect() {
     </section>
 
     <section>
-      <h2 style="font-size: 1rem">Direct (server-to-server) checkout</h2>
+      <h2 style="font-size: 1rem">
+        Direct (server-to-server) checkout
+        <InfoTip text="The card number is sent from this shop's server straight to the gateway API. That's the strictest PCI scope (SAQ D) for a merchant - only acceptable here because no real cards exist." />
+      </h2>
       <p style="color: #666; font-size: 0.85rem">
         The shop collects the card itself and posts it straight to the gateway API. That puts the
         merchant in the strictest PCI scope (SAQ D) &mdash; fine here since no real cards exist, but
@@ -51,6 +59,7 @@ async function checkoutDirect() {
       </p>
       <label>
         Test card
+        <InfoTip text="Test card numbers deterministically map to an outcome (approved, declined, error, or 3DS challenge) - see packages/shared/testCards for the full table." />
         <select v-model="selectedCard">
           <option v-for="c in TEST_CARD_CATALOG" :key="c.number" :value="c.number">{{ c.label }}</option>
         </select>

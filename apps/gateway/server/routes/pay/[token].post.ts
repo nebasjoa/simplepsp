@@ -1,7 +1,6 @@
-import { transition, type PaymentStatus } from "@simplepsp/shared";
 import { prisma } from "../../utils/prisma";
-import { sendWebhook } from "../../utils/webhook";
 import { chargeCard, eventForOutcome } from "../../utils/acquirer";
+import { finalizeHostedPayment } from "../../utils/hostedFlow";
 
 interface FormBody {
   cardNumber: string;
@@ -29,24 +28,17 @@ export default defineEventHandler(async (event) => {
     currency: payment.currency,
   });
 
-  const nextStatus = transition(
-    { status: payment.status as PaymentStatus, captureNow: payment.captureNow },
-    eventForOutcome(charge.outcome),
-  );
-
-  const updated = await prisma.payment.update({
+  // Record the card metadata as soon as we know it, regardless of whether a 3DS challenge follows.
+  const withCard = await prisma.payment.update({
     where: { id: payment.id },
-    data: {
-      status: nextStatus,
-      cardBrand: charge.brand,
-      cardLast4: charge.last4,
-    },
+    data: { cardBrand: charge.brand, cardLast4: charge.last4 },
   });
 
-  const merchant = await prisma.merchant.findUniqueOrThrow({ where: { id: payment.merchantId } });
-  await sendWebhook(merchant, updated);
+  if (charge.outcome === "requires_3ds") {
+    await sendRedirect(event, `/pay/${token}/3ds`, 302);
+    return;
+  }
 
-  const redirectUrl = new URL(payment.returnUrl);
-  redirectUrl.searchParams.set("paymentId", payment.id);
-  await sendRedirect(event, redirectUrl.toString(), 302);
+  const merchant = await prisma.merchant.findUniqueOrThrow({ where: { id: payment.merchantId } });
+  await finalizeHostedPayment(event, withCard, merchant, eventForOutcome(charge.outcome));
 });

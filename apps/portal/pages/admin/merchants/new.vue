@@ -26,7 +26,10 @@ async function create() {
 <template>
   <div>
     <p><NuxtLink to="/admin/merchants">← Merchants</NuxtLink></p>
-    <h1>New merchant</h1>
+    <h1>
+      New merchant
+      <InfoTip text="Creates an apiKey (public), a secret (HMAC signing key), and an initial portal password all at once. All three are shown once on this screen only - after that the secret can only be rotated, never re-fetched." />
+    </h1>
 
     <div v-if="!created">
       <form @submit.prevent="create">
@@ -38,7 +41,7 @@ async function create() {
     </div>
 
     <div v-else style="border: 1px solid #ddd; padding: 1rem; border-radius: 6px">
-      <p><strong>Merchant created.</strong> These are shown once — copy them now.</p>
+      <p><strong>Merchant created.</strong> These are shown once - copy them now.</p>
       <p>API key: <code data-testid="new-merchant-api-key">{{ created.apiKey }}</code></p>
       <p>Secret: <code data-testid="new-merchant-secret">{{ created.secret }}</code></p>
       <p>Initial portal password: <code data-testid="new-merchant-initial-password">{{ created.initialPassword }}</code></p>

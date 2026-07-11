@@ -7,6 +7,9 @@ export default defineNuxtConfig({
     public: {
       gatewayUrl: process.env.GATEWAY_URL || "http://localhost:4101",
       shopUrl: process.env.SHOP_URL || "http://localhost:4100",
+      // The API key is a public identifier (sent as X-Api-Key), safe to expose - it's the
+      // secret, never put here, that actually authenticates requests.
+      gatewayApiKey: process.env.GATEWAY_API_KEY || "pk_demo",
     },
   },
 });

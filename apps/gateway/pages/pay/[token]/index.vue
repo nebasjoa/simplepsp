@@ -12,7 +12,11 @@ const cvc = ref("123");
 
 <template>
   <div v-if="payment" style="max-width: 420px; margin: 3rem auto; font-family: sans-serif">
-    <h1>Pay {{ (payment.amount / 100).toFixed(2) }} {{ payment.currency }}</h1>
+    <OwnerNote role="Merchant" :name="payment.merchantName" />
+    <h1>
+      Pay {{ (payment.amount / 100).toFixed(2) }} {{ payment.currency }}
+      <InfoTip text="This page is hosted by the gateway, not the shop - the card data you enter here is never seen by the merchant's own server." />
+    </h1>
     <p>Reference: {{ payment.reference }}</p>
 
     <form method="post" :action="`/pay/${token}`">
@@ -38,7 +42,8 @@ const cvc = ref("123");
     </form>
 
     <p style="color: #666; font-size: 0.85rem">
-      Demo test cards: 4242 4242 4242 4242 (approved), 4000 0000 0000 0002 (declined).
+      Demo test cards: 4242 4242 4242 4242 (approved), 4000 0000 0000 0002 (declined), 4000 0000 0000 3220
+      (requires 3D Secure).
     </p>
   </div>
   <div v-else>

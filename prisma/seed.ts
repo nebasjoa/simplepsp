@@ -8,7 +8,7 @@ async function main() {
   const operatorPassword = randomBytes(9).toString("base64url");
   const operator = await prisma.operator.upsert({
     where: { email: "admin@demo.test" },
-    update: {},
+    update: { passwordHash: hashPassword(operatorPassword) },
     create: {
       email: "admin@demo.test",
       passwordHash: hashPassword(operatorPassword),

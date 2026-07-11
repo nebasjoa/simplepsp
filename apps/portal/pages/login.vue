@@ -22,7 +22,10 @@ async function login() {
 
 <template>
   <div style="max-width: 360px; margin: 4rem auto; font-family: sans-serif">
-    <h1>Merchant login</h1>
+    <h1>
+      Merchant login
+      <InfoTip text="Merchant sessions are a separate namespace from operator (admin) sessions - logging in here never grants access to /admin." />
+    </h1>
     <form @submit.prevent="login">
       <p><label>Email<br /><input v-model="email" type="email" required /></label></p>
       <p><label>Password<br /><input v-model="password" type="password" required /></label></p>

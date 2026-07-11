@@ -37,19 +37,22 @@ async function fire() {
   <div>
     <h1>Fire a test payment</h1>
     <p style="color: #666">
-      Sends a real signed request to the gateway using this account's own API credentials — handy for live
+      Sends a real signed request to the gateway using this account's own API credentials - handy for live
       demos.
     </p>
 
     <p>
       <label><input v-model="mode" type="radio" value="hosted" /> Hosted (redirect)</label>
+      <InfoTip text="Card data is entered on a gateway-hosted page - this account's server never sees the card number." />
       &nbsp;
       <label><input v-model="mode" type="radio" value="direct" /> Direct (server-to-server)</label>
+      <InfoTip text="The card is posted straight to the gateway API in this request. Puts the merchant in the strictest PCI scope (SAQ D) - fine for a demo, but real gateways steer merchants toward the hosted flow." />
     </p>
 
     <p v-if="mode === 'direct'">
       <label>
         Test card
+        <InfoTip text="Each test card number deterministically maps to an outcome (approved, declined, processing error, or a 3DS challenge) - no randomness, so demos are reproducible." />
         <select v-model="selectedCard">
           <option v-for="c in TEST_CARD_CATALOG" :key="c.number" :value="c.number">{{ c.label }}</option>
         </select>

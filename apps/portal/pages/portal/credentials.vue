@@ -37,16 +37,28 @@ async function rotateSecret() {
   <div>
     <h1>API credentials</h1>
 
-    <p><strong>API key</strong><br /><code>{{ creds?.apiKey }}</code></p>
+    <p>
+      <strong>API key</strong>
+      <InfoTip text="Public identifier for your account. Sent on every request as the X-Api-Key header - safe to expose, it doesn't authenticate anything by itself." />
+      <br /><code>{{ creds?.apiKey }}</code>
+    </p>
 
     <p>
-      <strong>Secret</strong><br />
-      <span v-if="revealedSecret"><code>{{ revealedSecret }}</code> — copy it now, it won't be shown again.</span>
+      <strong>Secret</strong>
+      <InfoTip
+        text="Never sent over the wire. It signs each request as HMAC-SHA256(secret, `timestamp.rawBody`) into the X-Signature header - the gateway recomputes and compares it to verify the request really came from you and wasn't tampered with."
+      />
+      <br />
+      <span v-if="revealedSecret"><code>{{ revealedSecret }}</code> - copy it now, it won't be shown again.</span>
       <span v-else style="color: #666">Hidden. Rotating shows the new value once.</span>
     </p>
     <button :disabled="rotating" @click="rotateSecret">{{ rotating ? "Rotating..." : "Rotate secret" }}</button>
+    <InfoTip text="Rotating invalidates the old secret immediately - any request still signed with it starts failing right away." />
 
-    <h2>Default webhook URL</h2>
+    <h2>
+      Default webhook URL
+      <InfoTip text="Where the gateway POSTs signed payment.* events. A per-payment webhookUrl, if sent when creating the payment, overrides this default." />
+    </h2>
     <p>
       <input v-model="webhookUrl" style="width: 100%; max-width: 420px" placeholder="https://example.com/webhooks/gateway" />
     </p>

@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event);
 
   // Prefer the locally reconciled order (populated by the signed webhook) over asking the
-  // gateway again — the webhook, not the browser redirect, is the source of truth.
+  // gateway again - the webhook, not the browser redirect, is the source of truth.
   const cached = getOrder(paymentId);
   if (cached) return cached;
 
