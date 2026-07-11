@@ -47,7 +47,23 @@ model Payment {
   updatedAt      DateTime @updatedAt
   refunds        Refund[]
 
+  settlementBatchId String?
+  settlementBatch   SettlementBatch? @relation(fields: [settlementBatchId], references: [id])
+  settledAmount     Int?
+  settlementOutcome String?
+  settlementReason  String?
+
   @@unique([merchantId, idempotencyKey])
+}
+
+model SettlementBatch {
+  id           String   @id @default(cuid())
+  status       String
+  paymentCount Int      @default(0)
+  settledCount Int      @default(0)
+  failedCount  Int      @default(0)
+  createdAt    DateTime @default(now())
+  payments     Payment[]
 }
 
 model Refund {

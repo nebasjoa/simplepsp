@@ -3,6 +3,7 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: ["nuxt-auth-utils"],
   runtimeConfig: {
+    internalAdminSecret: process.env.INTERNAL_ADMIN_SECRET || "",
     public: {
       gatewayUrl: process.env.GATEWAY_URL || "http://localhost:4101",
       portalUrl: process.env.PORTAL_URL || "http://localhost:4103",

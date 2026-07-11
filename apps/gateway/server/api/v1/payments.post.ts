@@ -67,11 +67,11 @@ export default defineEventHandler(async (event) => {
       },
     });
 
-    const charge = await chargeCard(config.acquirerUrl, {
-      number: body.card.number,
-      amount: body.amount,
-      currency: body.currency,
-    });
+    const charge = await chargeCard(
+      config.acquirerUrl,
+      { number: body.card.number, amount: body.amount, currency: body.currency },
+      payment.id,
+    );
 
     const nextStatus = transition(
       { status: payment.status as PaymentStatus, captureNow: payment.captureNow },

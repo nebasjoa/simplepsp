@@ -12,6 +12,7 @@ async function logout() {
     <nav style="display: flex; gap: 1.5rem; align-items: center; padding: 1rem 2rem; border-bottom: 1px solid #ddd; background: #1a1a2e; color: white">
       <strong>SimplePSP Admin</strong>
       <NuxtLink to="/admin/merchants" style="color: white">Merchants</NuxtLink>
+      <NuxtLink to="/admin/settlements" style="color: white">Settlements</NuxtLink>
       <span style="margin-left: auto; display: inline-flex; align-items: center; color: #ccc">
         <OwnerNote role="Operator" :email="user?.email" />
         <InfoTip

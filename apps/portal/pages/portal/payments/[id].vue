@@ -20,6 +20,10 @@ const { data: payment } = await useFetch(`/api/portal/payments/${route.params.id
       Created {{ new Date(payment.createdAt).toLocaleString() }} &middot; Updated
       {{ new Date(payment.updatedAt).toLocaleString() }}
     </p>
+    <p v-if="payment.settlementBatchId" style="font-size: 0.85rem">
+      Settled {{ ((payment.settledAmount ?? 0) / 100).toFixed(2) }} {{ payment.currency }} in batch {{ payment.settlementBatchId }}
+      <InfoTip text="Capture only means the card cleared. Settlement is the separate, batched step where the gateway confirms with the acquirer it can actually pay this out - that batch id is the audit trail for that confirmation." />
+    </p>
 
     <h2>
       Refunds

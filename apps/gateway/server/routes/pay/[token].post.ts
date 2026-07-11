@@ -22,11 +22,11 @@ export default defineEventHandler(async (event) => {
   const form = await readBody<FormBody>(event);
   const config = useRuntimeConfig(event);
 
-  const charge = await chargeCard(config.acquirerUrl, {
-    number: form.cardNumber,
-    amount: payment.amount,
-    currency: payment.currency,
-  });
+  const charge = await chargeCard(
+    config.acquirerUrl,
+    { number: form.cardNumber, amount: payment.amount, currency: payment.currency },
+    payment.id,
+  );
 
   // Record the card metadata as soon as we know it, regardless of whether a 3DS challenge follows.
   const withCard = await prisma.payment.update({

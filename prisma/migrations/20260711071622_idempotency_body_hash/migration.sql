@@ -1,2 +1,2 @@
 -- AlterTable
-ALTER TABLE `payment` ADD COLUMN `idempotencyBodyHash` VARCHAR(191) NULL;
+ALTER TABLE `Payment` ADD COLUMN `idempotencyBodyHash` VARCHAR(191) NULL;

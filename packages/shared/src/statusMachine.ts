@@ -8,7 +8,8 @@ export type PaymentEvent =
   | "expire"
   | "error"
   | "refund"
-  | "partial_refund";
+  | "partial_refund"
+  | "settle";
 
 export const TERMINAL_STATUSES: readonly PaymentStatus[] = [
   "declined",
@@ -16,18 +17,23 @@ export const TERMINAL_STATUSES: readonly PaymentStatus[] = [
   "voided",
   "expired",
   "refunded",
+  "settled",
 ];
 
+// A settled payment has no further transitions here: in this simplified model,
+// refunds must happen before settlement. Real PSPs support post-settlement
+// reversals, but that's out of scope for this demo.
 const TRANSITIONS: Record<PaymentStatus, Partial<Record<PaymentEvent, PaymentStatus>>> = {
   initiated: { approve: "authorized", decline: "declined", error: "failed", expire: "expired" },
   authorized: { capture: "captured", void: "voided", expire: "expired" },
-  captured: { refund: "refunded", partial_refund: "partially_refunded" },
-  partially_refunded: { refund: "refunded", partial_refund: "partially_refunded" },
+  captured: { refund: "refunded", partial_refund: "partially_refunded", settle: "settled" },
+  partially_refunded: { refund: "refunded", partial_refund: "partially_refunded", settle: "settled" },
   declined: {},
   failed: {},
   voided: {},
   expired: {},
   refunded: {},
+  settled: {},
 };
 
 export function canTransition(from: PaymentStatus, to: PaymentStatus): boolean {

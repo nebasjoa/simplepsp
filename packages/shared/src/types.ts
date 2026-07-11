@@ -7,7 +7,8 @@ export type PaymentStatus =
   | "voided"
   | "expired"
   | "partially_refunded"
-  | "refunded";
+  | "refunded"
+  | "settled";
 
 export interface Merchant {
   id: string;
@@ -44,6 +45,19 @@ export interface Payment {
   webhookUrl: string;
   createdAt: Date;
   updatedAt: Date;
+  settlementBatchId: string | null;
+  settledAmount: number | null;
+  settlementOutcome: "settled" | "failed" | null;
+  settlementReason: string | null;
+}
+
+export interface SettlementBatch {
+  id: string;
+  status: string;
+  paymentCount: number;
+  settledCount: number;
+  failedCount: number;
+  createdAt: Date;
 }
 
 export interface Refund {

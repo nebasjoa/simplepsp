@@ -11,6 +11,7 @@ const STATUSES = [
   "expired",
   "partially_refunded",
   "refunded",
+  "settled",
 ];
 
 const status = ref("");

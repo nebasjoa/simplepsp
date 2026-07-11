@@ -189,7 +189,19 @@ model WebhookDelivery {
   attempts  Int      @default(0)
   createdAt DateTime @default(now())
 }
+
+model SettlementBatch {           // one row per admin-triggered batch run
+  id           String    @id @default(cuid())
+  status       String              // "completed"
+  paymentCount Int       @default(0)
+  settledCount Int       @default(0)
+  failedCount  Int       @default(0)
+  createdAt    DateTime  @default(now())
+  payments     Payment[]
+}
 ```
+
+`Payment` also carries `settlementBatchId` (FK to the batch that settled it, if any), `settledAmount` (net of refunds, minor units), `settlementOutcome` (`"settled" | "failed"`), and `settlementReason`.
 
 `db:seed` creates: one **operator** (`admin@demo.test` / a printed password) so the admin area works immediately, and one **demo merchant** with a portal login (`merchant@demo.test`) plus **known, printed** API credentials (`apiKey = "pk_demo"`, `secret = "sk_demo_secret"`) so the shop works out of the box. Print every credential on seed - this is a demo, discoverability beats secrecy.
 
@@ -197,15 +209,17 @@ model WebhookDelivery {
 
 ```
 initiated ──approve──► authorized ──capture──► captured ──refund──► refunded
-    │                      │                       │
-    │                      ├──void──► voided       └─partial─► partially_refunded ──► refunded
-    ├──decline──► declined ├──expire─► expired
+    │                      │                       │        │
+    │                      ├──void──► voided       │        └─partial─► partially_refunded ──► refunded
+    │                      └──expire─► expired     └──settle──► settled ◄──settle── partially_refunded
+    ├──decline──► declined
     └──error────► failed
 ```
 
 - `captureNow: true` collapses `initiated → captured` on approval (a "sale").
-- Terminal states: `declined`, `failed`, `voided`, `expired`, `refunded`.
+- Terminal states: `declined`, `failed`, `voided`, `expired`, `refunded`, `settled`.
 - Export `canTransition(from, to): boolean` and a `transition(payment, event)` that throws on illegal moves. Every status write goes through it.
+- `settled` is only reached via the batch settlement run (see the Settlement section below), never a merchant API call. Simplification: once settled there are no further transitions - refunds must happen *before* settlement in this model. Real PSPs support post-settlement reversals; that's out of scope here.
 
 ---
 
@@ -282,6 +296,21 @@ On every terminal status change the gateway POSTs the merchant's `webhookUrl`:
 
 Signed with the same HMAC headers. The shop's receiver (`apps/shop/server/api/webhooks/gateway.post.ts`) verifies the signature over the raw body before trusting it, then reconciles its local order. Record each attempt in `WebhookDelivery`. Retries with backoff are Phase 2.
 
+`payment.settled` fires the same way once a payment's status flips to `settled` during a batch run - `sendWebhook` derives the event name from the payment's current status, so no separate code path is needed.
+
+---
+
+## Batch settlement (gateway ↔ acquirer, admin-triggered)
+
+`capture` is a purely local status flip - it never talks to the acquirer. Settlement is the missing money-movement step: periodically the gateway submits everything it has captured (across **all** merchants) to the acquirer in one batch, the acquirer confirms which items cleared, and only then does a payment become `settled` - the point at which the gateway can honestly tell a merchant "this is yours."
+
+- **Trigger**: an operator, from `/admin/settlements` in the portal. One action settles everything eligible for every merchant at once - there's no per-merchant or manual selection.
+- **Ownership**: the batch logic (querying eligible payments, calling the acquirer, running `transition(..., "settle")`, sending webhooks) lives in the **gateway** (`POST /api/internal/settlements/run`), not the portal - consistent with the gateway being the only place that ever calls the acquirer or writes payment status. The portal's `/admin/settlements` page only *reads* `Payment`/`SettlementBatch` rows directly from the shared DB (same pattern as the merchants list) and calls the gateway to trigger a run.
+- **Trust boundary**: this is neither a merchant API call (HMAC) nor an operator session (cookie) - it's service-to-service. A shared `INTERNAL_ADMIN_SECRET`, sent as `X-Internal-Secret`, gates `/api/internal/*` on the gateway via `server/middleware/internal-auth.ts`, checked with `timingSafeEqual` like everything else that compares secrets in this repo.
+- **Eligibility**: `status IN ("captured", "partially_refunded") AND settlementBatchId IS NULL`. The settled amount nets out any refunds already applied.
+- **Acquirer**: `POST /settle` on the mock acquirer takes `{ items: [{ paymentId, amount, currency }] }` and returns a per-item outcome. It's deterministic-always-succeeds for now (these payments were already authorized, so real-world failure here is rare) but the shape supports per-item failure so a future decline scenario is a small addition, not a redesign. A failed item stays in its prior status and is retried on the next run.
+- **Audit trail**: every run creates a `SettlementBatch` row (even a zero-payment run) and each settled `Payment` links back to it via `settlementBatchId`.
+
 ---
 
 ## Merchant portal - `apps/portal` (merchant login)
@@ -317,6 +346,8 @@ Pages:
 | `/admin/merchants` | List all merchants with active/inactive state and basic volume. |
 | `/admin/merchants/new` | **Create a merchant.** |
 | `/admin/merchants/:id` | Edit name, enable/disable, rotate keys, reset portal password. |
+| `/admin/settlements` | Pending-eligible summary, **run a batch settlement** for all merchants at once, and history of past batches. |
+| `/admin/settlements/:id` | One batch's detail: per-merchant totals and per-payment outcomes. |
 
 **Create-merchant flow** (`/admin/merchants/new`): operator enters `name` + `email`; the server generates `apiKey` (public, e.g. `pk_live_…`) and `secret` (HMAC), generates an initial portal password (or invite), hashes the password, and stores the merchant `active: true`. The `apiKey`, `secret`, and initial password are **shown once** on the confirmation screen - after that the secret is never retrievable, only rotatable. Never log or email the raw secret.
 
@@ -343,7 +374,8 @@ Guard: an operator-session middleware protects `/admin/*` and `server/api/admin/
 - [ ] Admin `/admin`: operator login, merchant list, **create merchant** (generates apiKey + secret + initial password, shown once), enable/disable.
 - [ ] `active: false` blocks both the API (HMAC middleware → `401`) and portal login.
 - [ ] Operator and merchant sessions are separate namespaces; neither can access the other's routes.
-- [ ] Playwright: hosted happy path (4242 → captured); a direct decline (…0002 → declined); admin creates a merchant and that merchant then logs into the portal and sees the payment.
+- [ ] Batch settlement: `/admin/settlements` runs one batch across all merchants, gateway-owned via `POST /api/internal/settlements/run` (internal-secret gated), acquirer `/settle` returns per-item outcomes, settled payments fire `payment.settled` webhooks.
+- [ ] Playwright: hosted happy path (4242 → captured); a direct decline (…0002 → declined); admin creates a merchant and that merchant then logs into the portal and sees the payment; admin runs a settlement batch and the payment shows `settled`.
 
 ---
 
@@ -351,7 +383,7 @@ Guard: an operator-session middleware protects `/admin/*` and `server/api/admin/
 
 **Phase 2** - partial captures; `expire` flow; webhook retries with exponential backoff.
 
-**Phase 3** - multiple merchants with distinct keys; a settlement/reporting view; optionally wire this to the HTTP Simulator so the same payment can be inspected at the wire level; MariaDB datasource swap if moving off SQLite.
+**Phase 3** - scheduled/automatic settlement runs (today it's admin-triggered only); modeling occasional settlement failures with a retry-eligible reason catalog; optionally wire this to the HTTP Simulator so the same payment can be inspected at the wire level; MariaDB datasource swap if moving off SQLite.
 
 ---
 
