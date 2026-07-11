@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { detectBrand, PAYMENT_METHOD_CATALOG, type PaymentMethod } from "@simplepsp/shared";
+import { detectBrand, DUMMY_WALLET_INSTRUMENTS, PAYMENT_METHOD_CATALOG, type PaymentMethod } from "@simplepsp/shared";
 
 const route = useRoute();
 const token = route.params.token as string;
@@ -37,6 +37,20 @@ watch(
   },
   { immediate: true },
 );
+
+const activeMethodLabel = computed(
+  () => PAYMENT_METHOD_CATALOG.find((m) => m.id === activeMethod.value)?.label ?? "",
+);
+
+const showWalletPopup = ref(false);
+const walletInstruments = computed(() =>
+  activeMethod.value === "paypal" || activeMethod.value === "google_pay"
+    ? DUMMY_WALLET_INSTRUMENTS[activeMethod.value]
+    : [],
+);
+watch(activeMethod, () => {
+  showWalletPopup.value = false;
+});
 
 const formattedAmount = computed(() => {
   if (!payment.value) return "";
@@ -98,16 +112,45 @@ function onCvcInput(event: Event) {
 
       <div v-if="activeMethod !== 'card'" class="wallet-block">
         <p class="wallet-copy">
-          Simulated {{ PAYMENT_METHOD_CATALOG.find((m) => m.id === activeMethod)?.label }} checkout
-          <InfoTip text="This is a dummy wallet button - no real PayPal/Google Pay integration exists. It submits straight to the gateway and always approves instantly, to demonstrate that a real gateway would route this payment method through a different rail than the card form." />
+          Simulated {{ activeMethodLabel }} checkout
+          <InfoTip text="This opens a dummy popup that mimics PayPal/Google Pay's own payment-method picker - no real integration exists. Whatever instrument you pick, it submits straight to the gateway and always approves instantly, to demonstrate that a real gateway would route this payment method through a different rail than the card form." />
         </p>
-        <form method="post" :action="`/pay/${token}/wallet`">
-          <input type="hidden" name="method" :value="activeMethod" />
-          <button type="submit" class="pay-button">
-            Pay {{ formattedAmount }} {{ payment.currency }} with
-            {{ PAYMENT_METHOD_CATALOG.find((m) => m.id === activeMethod)?.label }}
-          </button>
-        </form>
+        <button type="button" class="pay-button" data-testid="wallet-continue-button" @click="showWalletPopup = true">
+          Continue with {{ activeMethodLabel }}
+        </button>
+      </div>
+
+      <div
+        v-if="showWalletPopup"
+        class="wallet-overlay"
+        role="presentation"
+        @click.self="showWalletPopup = false"
+      >
+        <div class="wallet-modal" :class="`wallet-modal--${activeMethod}`">
+          <div class="wallet-modal-header">
+            <span class="wallet-modal-brand">{{ activeMethod === "paypal" ? "PayPal" : "Google Pay" }}</span>
+            <button type="button" class="wallet-modal-close" aria-label="Close" @click="showWalletPopup = false">
+              ×
+            </button>
+          </div>
+          <p class="wallet-modal-summary">
+            Pay {{ formattedAmount }} {{ payment.currency }} to {{ payment.merchantName }}
+          </p>
+          <form method="post" :action="`/pay/${token}/wallet`" class="wallet-modal-form">
+            <input type="hidden" name="method" :value="activeMethod" />
+            <fieldset class="wallet-instruments">
+              <legend>Choose how to pay</legend>
+              <label v-for="(instr, i) in walletInstruments" :key="instr.id" class="wallet-instrument">
+                <input type="radio" name="instrumentLabel" :value="instr.label" :checked="i === 0" />
+                {{ instr.label }}
+              </label>
+            </fieldset>
+            <button type="submit" class="pay-button" data-testid="wallet-pay-button">
+              Pay {{ formattedAmount }} {{ payment.currency }}
+            </button>
+          </form>
+          <p class="wallet-modal-disclaimer">Simulated {{ activeMethodLabel }} window - test data only, always approves.</p>
+        </div>
       </div>
 
       <form v-if="activeMethod === 'card'" method="post" :action="`/pay/${token}`" class="card-form">
@@ -295,6 +338,126 @@ function onCvcInput(event: Event) {
   margin: 0;
   font-size: 0.85rem;
   color: rgba(18, 20, 28, 0.6);
+}
+
+.wallet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(12, 14, 20, 0.55);
+}
+
+.wallet-modal {
+  width: 100%;
+  max-width: 340px;
+  box-sizing: border-box;
+  background: var(--surface);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.wallet-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.1rem;
+  color: #fff;
+}
+
+.wallet-modal--paypal .wallet-modal-header {
+  background: #003087;
+}
+
+.wallet-modal--google_pay .wallet-modal-header {
+  background: #ffffff;
+  color: var(--ink);
+  border-bottom: 1px solid rgba(18, 20, 28, 0.1);
+}
+
+.wallet-modal-brand {
+  font-weight: 700;
+  font-size: 1.05rem;
+  font-style: italic;
+  letter-spacing: -0.01em;
+}
+
+.wallet-modal--google_pay .wallet-modal-brand {
+  font-style: normal;
+  color: #4285f4;
+}
+
+.wallet-modal-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  opacity: 0.85;
+}
+
+.wallet-modal-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.wallet-modal--google_pay .wallet-modal-close:hover {
+  background: rgba(18, 20, 28, 0.06);
+}
+
+.wallet-modal-summary {
+  margin: 1rem 1.1rem 0;
+  font-size: 0.85rem;
+  color: rgba(18, 20, 28, 0.6);
+}
+
+.wallet-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem 1.1rem;
+}
+
+.wallet-instruments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: 1px solid rgba(18, 20, 28, 0.14);
+  border-radius: 9px;
+  padding: 0.6rem 0.75rem;
+  margin: 0;
+}
+
+.wallet-instruments legend {
+  padding: 0 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(18, 20, 28, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.wallet-instrument {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.9rem;
+  padding: 0.3rem 0.1rem;
+  cursor: pointer;
+}
+
+.wallet-modal-disclaimer {
+  margin: 0 1.1rem 1.1rem;
+  font-size: 0.72rem;
+  color: rgba(18, 20, 28, 0.45);
+  text-align: center;
 }
 
 .card-form {

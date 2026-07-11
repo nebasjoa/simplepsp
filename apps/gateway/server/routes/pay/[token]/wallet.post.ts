@@ -4,6 +4,7 @@ import { finalizeHostedPayment } from "../../../utils/hostedFlow";
 
 interface FormBody {
   method: "paypal" | "google_pay";
+  instrumentLabel?: string;
 }
 
 const ENABLED_FIELD = {
@@ -31,7 +32,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const config = useRuntimeConfig(event);
-  await chargeWallet(config.acquirerUrl, method, payment.amount, payment.currency, payment.id);
+  await chargeWallet(config.acquirerUrl, method, payment.amount, payment.currency, payment.id, form.instrumentLabel);
 
   const updated = await prisma.payment.update({
     where: { id: payment.id },

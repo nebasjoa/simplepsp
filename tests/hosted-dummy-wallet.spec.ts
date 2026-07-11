@@ -48,7 +48,10 @@ test("admin enables dummy PayPal for a merchant and a hosted checkout completes 
   await page.waitForURL(/\/pay\//);
   await page.waitForLoadState("networkidle");
   await page.getByRole("button", { name: "PayPal" }).click();
-  await page.getByRole("button", { name: /with PayPal/ }).click();
+  await page.getByTestId("wallet-continue-button").click();
+
+  await expect(page.getByText("Choose how to pay")).toBeVisible();
+  await page.getByTestId("wallet-pay-button").click();
 
   await page.waitForURL(/\/portal\/test\?paymentId=/);
   await expect(page.getByText(/"status": "captured"/)).toBeVisible();

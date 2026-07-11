@@ -54,8 +54,9 @@ export async function chargeWallet(
   amount: number,
   currency: string,
   paymentId: string,
+  instrumentLabel?: string,
 ): Promise<WalletChargeResult> {
-  const body = { method, amount, currency };
+  const body = { method, amount, currency, instrumentLabel };
   const startedAt = Date.now();
   await logLine(
     `ACQUIRER OUT      paymentId=${paymentId} -> POST ${acquirerUrl}/charge-wallet body=${formatBody(body)}`,
