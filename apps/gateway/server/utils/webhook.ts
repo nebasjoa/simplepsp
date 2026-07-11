@@ -1,6 +1,7 @@
 import { sign } from "@simplepsp/shared/server";
 import type { Merchant, Payment } from "@prisma/client";
 import { prisma } from "./prisma";
+import { logLine } from "./logger";
 
 export async function sendWebhook(merchant: Pick<Merchant, "secret">, payment: Payment) {
   const payload = {
@@ -19,6 +20,9 @@ export async function sendWebhook(merchant: Pick<Merchant, "secret">, payment: P
     data: { paymentId: payment.id, eventType: payload.event, status: "pending", attempts: 1 },
   });
 
+  const startedAt = Date.now();
+  await logLine(`WEBHOOK  OUT       ${payload.event} -> ${payment.webhookUrl} body=${rawBody}`);
+
   try {
     await $fetch(payment.webhookUrl, {
       method: "POST",
@@ -30,7 +34,12 @@ export async function sendWebhook(merchant: Pick<Merchant, "secret">, payment: P
       body: rawBody,
     });
     await prisma.webhookDelivery.update({ where: { id: delivery.id }, data: { status: "delivered" } });
-  } catch {
+    await logLine(`WEBHOOK  DELIVERED ${payload.event} -> ${payment.webhookUrl} ${Date.now() - startedAt}ms`);
+  } catch (err) {
     await prisma.webhookDelivery.update({ where: { id: delivery.id }, data: { status: "failed" } });
+    const reason = err instanceof Error ? err.message : String(err);
+    await logLine(
+      `WEBHOOK  FAILED    ${payload.event} -> ${payment.webhookUrl} ${Date.now() - startedAt}ms error=${reason}`,
+    );
   }
 }
